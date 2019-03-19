@@ -107,6 +107,9 @@ int main()
     size_t yComps = 0x1u<<9;
     size_t zComps = 0x1u<<9;
     size_t verts = xComps*yComps*zComps;
+
+    printf("%i\n", verts);
+
     uint32_t bufSize = verts*sizeof(uint32_t);
     uint32_t* mem = (uint32_t*)malloc(bufSize);
     for (size_t i=0; i<xComps; i++)

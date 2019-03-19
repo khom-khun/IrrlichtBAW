@@ -356,9 +356,7 @@ namespace scene
 		\param id: An id of the node. This id can be used to identify the node.
 		\return Pointer to the sky box if successful, otherwise NULL.
 		This pointer should not be dropped. See IReferenceCounted::drop() for more information. */
-		virtual ISceneNode* addSkyBoxSceneNode(video::ITexture* top, video::ITexture* bottom,
-			video::ITexture* left, video::ITexture* right, video::ITexture* front,
-			video::ITexture* back, IDummyTransformationSceneNode* parent = 0, int32_t id=-1) = 0;
+		virtual ISceneNode* addSkyBoxSceneNode(video::ITexture* cubemap, IDummyTransformationSceneNode* parent = 0, int32_t id=-1) = 0;
 
 		//! Adds a skydome scene node to the scene tree.
 		/** A skydome is a large (half-) sphere with a panoramic texture

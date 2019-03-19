@@ -131,9 +131,7 @@ namespace scene
 
 		//! Adds a skybox scene node. A skybox is a big cube with 6 textures on it and
 		//! is drawn around the camera position.
-		virtual ISceneNode* addSkyBoxSceneNode(video::ITexture* top, video::ITexture* bottom,
-			video::ITexture* left, video::ITexture* right, video::ITexture* front,
-			video::ITexture* back, IDummyTransformationSceneNode* parent = 0, int32_t id=-1);
+		virtual ISceneNode* addSkyBoxSceneNode(video::ITexture *cubemap, IDummyTransformationSceneNode* parent = 0, int32_t id=-1);
 
 		//! Adds a skydome scene node. A skydome is a large (half-) sphere with a
 		//! panoramic texture on it and is drawn around the camera position.

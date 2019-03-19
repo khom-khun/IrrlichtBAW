@@ -417,15 +417,12 @@ IBillboardSceneNode* CSceneManager::addBillboardSceneNode(IDummyTransformationSc
 
 //! Adds a skybox scene node. A skybox is a big cube with 6 textures on it and
 //! is drawn around the camera position.
-ISceneNode* CSceneManager::addSkyBoxSceneNode(video::ITexture* top, video::ITexture* bottom,
-	video::ITexture* left, video::ITexture* right, video::ITexture* front,
-	video::ITexture* back, IDummyTransformationSceneNode* parent, int32_t id)
+ISceneNode* CSceneManager::addSkyBoxSceneNode(video::ITexture* cubemap, IDummyTransformationSceneNode* parent, int32_t id)
 {
 	if (!parent)
 		parent = this;
 
-	ISceneNode* node = new CSkyBoxSceneNode(top, bottom, left, right,
-			front, back, redundantMeshDataBuf,0, parent, this, id);
+	ISceneNode* node = new CSkyBoxSceneNode(cubemap, redundantMeshDataBuf,0, parent, this, id);
 
 	node->drop();
 	return node;

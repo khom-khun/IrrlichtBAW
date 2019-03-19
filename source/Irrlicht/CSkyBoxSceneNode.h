@@ -19,14 +19,13 @@ namespace scene
         protected:
             virtual ~CSkyBoxSceneNode()
             {
-                for (size_t i=0; i<6; i++)
-                    sides[i]->drop();
+                
+                buffer->drop();
             }
 
         public:
             //! constructor
-            CSkyBoxSceneNode(video::ITexture* top, video::ITexture* bottom, video::ITexture* left,
-                video::ITexture* right, video::ITexture* front, video::ITexture* back,
+            CSkyBoxSceneNode(video::ITexture *cubemap,
                 video::IGPUBuffer* vertPositions, size_t positionsOffsetInBuf,
                 IDummyTransformationSceneNode* parent, ISceneManager* mgr, int32_t id);
             //! clone Ctor
@@ -49,7 +48,7 @@ namespace scene
             //! This function is needed for inserting the node into the scene hirachy on a
             //! optimal position for minimizing renderstate changes, but can also be used
             //! to directly modify the material of a scene node.
-            virtual video::SGPUMaterial& getMaterial(uint32_t i);
+            virtual video::SGPUMaterial& getMaterial();
 
             //! returns amount of materials used by this scene node.
             virtual uint32_t getMaterialCount() const;
@@ -63,8 +62,8 @@ namespace scene
         private:
 
             core::aabbox3d<float> Box;
-            video::IGPUMeshBuffer* sides[6];
-            video::SGPUMaterial Material[6];
+            video::IGPUMeshBuffer* buffer;
+            video::SGPUMaterial mat;
 	};
 
 } // end namespace scene

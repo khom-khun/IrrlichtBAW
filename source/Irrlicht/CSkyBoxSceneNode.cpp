@@ -6,18 +6,138 @@
 #include "IVideoDriver.h"
 #include "ISceneManager.h"
 #include "ICameraSceneNode.h"
+#include "IGPUProgrammingServices.h"
+#include "IShaderConstantSetCallBack.h"
 
 #include "os.h"
 
+const char *vS = R"(
+#version 430 core
+layout(location = 0) in vec4 pos;
+
+uniform mat4 MVP;
+
+out vec4 tCoords;
+
+void main(){
+    gl_Position = MVP * pos;
+    tCoords = pos;
+}
+
+)";
+
+const char *fS = R"(
+#version 430 core
+
+layout(location = 0) out vec4 color;
+
+layout(location = 0) uniform samplerCube cubeMap;
+
+in vec4 tCoords;
+
+void main(){
+    color = texture(cubeMap, tCoords.xyz);
+}
+
+)";
+
+
 namespace irr
 {
+
+    class SkyboxMVPCallback : public video::IShaderConstantSetCallBack
+    {
+        int32_t mvpUniformLocation;
+        video::E_SHADER_CONSTANT_TYPE mvpUniformType;
+    public:
+        SkyboxMVPCallback() : mvpUniformLocation(-1), mvpUniformType(video::ESCT_FLOAT_VEC3) {}
+
+        virtual void PostLink(video::IMaterialRendererServices* services, const video::E_MATERIAL_TYPE& materialType, const core::vector<video::SConstantLocationNamePair>& constants)
+        {
+            mvpUniformLocation = constants[0].location;
+            mvpUniformType = constants[0].type;
+        }
+
+        virtual void OnSetConstants(video::IMaterialRendererServices* services, int32_t userData)
+        {
+            services->setShaderConstant(services->getVideoDriver()->getTransform(video::EPTS_PROJ_VIEW_WORLD).pointer(), mvpUniformLocation, mvpUniformType, 1);
+        }
+
+        virtual void OnUnsetMaterial() {}
+    };
+
+video::IGPUMeshBuffer *createCube(video::IVideoDriver *driver) {
+    
+    float vertexData[] = {        
+        -1.0f,  1.0f, -1.0f,
+        -1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+         1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+
+        -1.0f, -1.0f,  1.0f,
+        -1.0f, -1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f,  1.0f,
+        -1.0f, -1.0f,  1.0f,
+
+         1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+
+        -1.0f, -1.0f,  1.0f,
+        -1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f, -1.0f,  1.0f,
+        -1.0f, -1.0f,  1.0f,
+
+        -1.0f,  1.0f, -1.0f,
+         1.0f,  1.0f, -1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+        -1.0f,  1.0f,  1.0f,
+        -1.0f,  1.0f, -1.0f,
+
+        -1.0f, -1.0f, -1.0f,
+        -1.0f, -1.0f,  1.0f,
+         1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+        -1.0f, -1.0f,  1.0f,
+         1.0f, -1.0f,  1.0f
+    };
+
+    auto upBuf = driver->getDefaultUpStreamingBuffer();
+    const void *dTP[] = { vertexData };
+    uint32_t offsets[] = { video::StreamingTransientDataBufferMT<>::invalid_address };
+    uint32_t alignments[] = { sizeof(decltype(vertexData[0u])) };
+    uint32_t sizes[] = { sizeof(vertexData) };
+
+    upBuf->multi_place(1u, (const void* const*)dTP, (uint32_t*)offsets, (uint32_t*)sizes, (uint32_t*)alignments);
+
+    auto buf = upBuf->getBuffer();
+    video::IGPUMeshDataFormatDesc *desc = driver->createGPUMeshDataFormatDesc();
+    desc->setVertexAttrBuffer(buf, asset::EVAI_ATTR0, asset::EF_R32G32B32_SFLOAT, sizeof(float) * 3, offsets[0]);
+    video::IGPUMeshBuffer *mb = new video::IGPUMeshBuffer;
+    mb->setMeshDataAndFormat(desc);
+    mb->setIndexType(asset::EIT_UNKNOWN);
+    mb->setIndexCount(36);
+    desc->drop();
+    mb->grab();
+    return mb;
+
+}
+
 namespace scene
 {
 
-
 //! constructor
-CSkyBoxSceneNode::CSkyBoxSceneNode(video::ITexture* top, video::ITexture* bottom, video::ITexture* left,
-			video::ITexture* right, video::ITexture* front, video::ITexture* back,
+CSkyBoxSceneNode::CSkyBoxSceneNode(video::ITexture *cubemap,
 			video::IGPUBuffer* vertPositions, size_t positionsOffsetInBuf,
 			IDummyTransformationSceneNode* parent, ISceneManager* mgr, int32_t id)
 : ISceneNode(parent, mgr, id)
@@ -32,8 +152,7 @@ CSkyBoxSceneNode::CSkyBoxSceneNode(video::ITexture* top, video::ITexture* bottom
 
 
 	// create material
-
-	video::SGPUMaterial mat;
+    mat.BackfaceCulling = false;
 	mat.ZBuffer = video::ECFN_NEVER;
 	mat.ZWriteEnable = false;
 	mat.TextureLayer[0].SamplingParams.TextureWrapU = video::ETC_CLAMP_TO_EDGE;
@@ -54,94 +173,18 @@ CSkyBoxSceneNode::CSkyBoxSceneNode(video::ITexture* top, video::ITexture* bottom
      -1-1-1     1-1-1         |//    |
 	                     0--------1
 	*/
-
-	video::ITexture* tex = front;
-	if (!tex) tex = left;
-	if (!tex) tex = back;
-	if (!tex) tex = right;
-	if (!tex) tex = top;
-	if (!tex) tex = bottom;
-
-	const float onepixel = tex?(1.0f / (tex->getSize()[0] * 1.5f)) : 0.0f;
-	const float t = 1.0f - onepixel;
-	const float o = 0.0f + onepixel;
-
 	video::IVideoDriver* driver = SceneManager->getVideoDriver();
-	// create front side
-	Material[0] = mat;
-	Material[0].setTexture(0, front);
-	float texcoords[2*4*2];
-	texcoords[0] = t;
-	texcoords[1] = t;
-	texcoords[2] = o;
-	texcoords[3] = t;
-	texcoords[4] = o;
-	texcoords[5] = o;
-	texcoords[6] = t;
-	texcoords[7] = o;
-	// one odd side
-	texcoords[8] = o;
-	texcoords[9] = o;
-	texcoords[10] = t;
-	texcoords[11] = o;
-	texcoords[12] = t;
-	texcoords[13] = t;
-	texcoords[14] = o;
-	texcoords[15] = t;
-	video::IDriverMemoryBacked::SDriverMemoryRequirements reqs;
-	reqs.vulkanReqs.size = sizeof(texcoords);
-	reqs.vulkanReqs.alignment = 4;
-	reqs.vulkanReqs.memoryTypeBits = 0xffffffffu;
-	reqs.memoryHeapLocation = video::IDriverMemoryAllocation::ESMT_DEVICE_LOCAL;
-	reqs.mappingCapability = video::IDriverMemoryAllocation::EMCAF_NO_MAPPING_ACCESS;
-	reqs.prefersDedicatedAllocation = true;
-	reqs.requiresDedicatedAllocation = true;
-    video::IGPUBuffer* texcoordBuf = SceneManager->getVideoDriver()->createGPUBufferOnDedMem(reqs,true);
-    texcoordBuf->updateSubRange(video::IDriverMemoryAllocation::MemoryRange(0,reqs.vulkanReqs.size),texcoords);
+	// creeate material
+    
+    SkyboxMVPCallback *callback = new SkyboxMVPCallback;
+    mat.MaterialType = (video::E_MATERIAL_TYPE)driver->getGPUProgrammingServices()->addHighLevelShaderMaterial(vS, nullptr, nullptr, nullptr, fS, 3, video::EMT_SOLID, callback, 0);
+    callback->drop();
 
-	// create left side
-	Material[1] = mat;
-	Material[1].setTexture(0, left);
-
-	// create back side
-	Material[2] = mat;
-	Material[2].setTexture(0, back);
-
-	// create right side
-	Material[3] = mat;
-	Material[3].setTexture(0, right);
-
-	// create top side
-	Material[4] = mat;
-	Material[4].setTexture(0, top);
-
-	// create bottom side
-	Material[5] = mat;
-	Material[5].setTexture(0, bottom);
+   
+	mat.setTexture(0, cubemap);
+    buffer = createCube(driver);
 
 
-	for (size_t i=0; i<6; i++)
-    {
-        sides[i] = new video::IGPUMeshBuffer();
-        sides[i]->setPrimitiveType(asset::EPT_TRIANGLE_FAN);
-        sides[i]->setIndexCount(4);
-        video::IGPUMeshDataFormatDesc* desc = driver->createGPUMeshDataFormatDesc();
-        sides[i]->setMeshDataAndFormat(desc);
-        desc->drop();
-    }
-    sides[0]->getMeshDataAndFormat()->setVertexAttrBuffer(vertPositions,asset::EVAI_ATTR0,asset::EF_R8G8B8_SSCALED,0,positionsOffsetInBuf);
-    sides[0]->getMeshDataAndFormat()->setVertexAttrBuffer(texcoordBuf,asset::EVAI_ATTR2,asset::EF_R32G32_SFLOAT);
-    sides[1]->getMeshDataAndFormat()->setVertexAttrBuffer(vertPositions,asset::EVAI_ATTR0,asset::EF_R8G8B8_SSCALED,0,positionsOffsetInBuf+3*4*1);
-    sides[1]->getMeshDataAndFormat()->setVertexAttrBuffer(texcoordBuf,asset::EVAI_ATTR2,asset::EF_R32G32_SFLOAT);
-    sides[2]->getMeshDataAndFormat()->setVertexAttrBuffer(vertPositions,asset::EVAI_ATTR0,asset::EF_R8G8B8_SSCALED,0,positionsOffsetInBuf+3*4*2);
-    sides[2]->getMeshDataAndFormat()->setVertexAttrBuffer(texcoordBuf,asset::EVAI_ATTR2,asset::EF_R32G32_SFLOAT);
-    sides[3]->getMeshDataAndFormat()->setVertexAttrBuffer(vertPositions,asset::EVAI_ATTR0,asset::EF_R8G8B8_SSCALED,0,positionsOffsetInBuf+3*4*3);
-    sides[3]->getMeshDataAndFormat()->setVertexAttrBuffer(texcoordBuf,asset::EVAI_ATTR2,asset::EF_R32G32_SFLOAT);
-    sides[4]->getMeshDataAndFormat()->setVertexAttrBuffer(vertPositions,asset::EVAI_ATTR0,asset::EF_R8G8B8_SSCALED,0,positionsOffsetInBuf+3*4*4);
-    sides[4]->getMeshDataAndFormat()->setVertexAttrBuffer(texcoordBuf,asset::EVAI_ATTR2,asset::EF_R32G32_SFLOAT);
-    sides[5]->getMeshDataAndFormat()->setVertexAttrBuffer(vertPositions,asset::EVAI_ATTR0,asset::EF_R8G8B8_SSCALED,0,positionsOffsetInBuf+3*4*5);
-    sides[5]->getMeshDataAndFormat()->setVertexAttrBuffer(texcoordBuf,asset::EVAI_ATTR2,asset::EF_R32G32_SFLOAT,0,2*4*sizeof(float));
-    texcoordBuf->drop();
 }
 
 CSkyBoxSceneNode::CSkyBoxSceneNode(CSkyBoxSceneNode* other,
@@ -157,12 +200,9 @@ CSkyBoxSceneNode::CSkyBoxSceneNode(CSkyBoxSceneNode* other,
 	Box.MinEdge.set(0,0,0);
 
 
-	for (size_t i=0; i<6; i++)
-    {
-        other->sides[i]->grab();
-        sides[i] = other->sides[i];
-		Material[i] = other->Material[i];
-    }
+    other->buffer->grab();
+    buffer = other->buffer;
+    mat = other->mat;
 }
 
 
@@ -175,7 +215,7 @@ void CSkyBoxSceneNode::render()
 	if (!camera || !driver || !canProceedPastFence())
 		return;
 
-	if ( !camera->isOrthogonal() )
+	/*if ( !camera->isOrthogonal() )
 	{
 		// draw perspective skybox
 
@@ -189,58 +229,22 @@ void CSkyBoxSceneNode::render()
 
 		driver->setTransform(video::E4X3TS_WORLD, concatenateBFollowedByA(translate,scale));
 
-		for (int32_t i=0; i<6; ++i)
-		{
-			driver->setMaterial(Material[i]);
-			driver->drawMeshBuffer(sides[i]);
-		}
-	}
-	else
-	{
-		// draw orthogonal skybox,
-		// simply choose one texture and draw it as 2d picture.
-		// there could be better ways to do this, but currently I think this is ok.
+	
+			driver->setMaterial(material);
+			driver->drawMeshBuffer(cube);
 
-		core::vector3df lookVect = camera->getTarget() - camera->getAbsolutePosition();
-		lookVect.normalize();
-		core::vector3df absVect( core::abs_(lookVect.X),
-					 core::abs_(lookVect.Y),
-					 core::abs_(lookVect.Z));
+	}*/
+    core::matrix4x3 translate(AbsoluteTransformation);
+    translate.setTranslation(camera->getAbsolutePosition());
 
-		int idx = 0;
+    // Draw the sky box between the near and far clip plane
+    const float viewDistance = (camera->getNearValue() + camera->getFarValue()) * 0.5f;
+    core::matrix4x3 scale;
+    scale.setScale(core::vector3df(viewDistance, viewDistance, viewDistance));
 
-		if ( absVect.X >= absVect.Y && absVect.X >= absVect.Z )
-		{
-			// x direction
-			idx = lookVect.X > 0 ? 0 : 2;
-		}
-		else
-		if ( absVect.Y >= absVect.X && absVect.Y >= absVect.Z )
-		{
-			// y direction
-			idx = lookVect.Y > 0 ? 4 : 5;
-		}
-		else
-		if ( absVect.Z >= absVect.X && absVect.Z >= absVect.Y )
-		{
-			// z direction
-			idx = lookVect.Z > 0 ? 1 : 3;
-		}
-
-		video::IVirtualTexture* vtex = Material[idx].getTexture(0);
-
-		if ( vtex && vtex->getVirtualTextureType()==video::IVirtualTexture::EVTT_OPAQUE_FILTERABLE )
-		{
-		    video::ITexture* texture = static_cast<video::ITexture*>(vtex);
-
-			core::rect<int32_t> rctDest(core::position2d<int32_t>(-1,0),
-									core::dimension2di(driver->getCurrentRenderTargetSize()));
-			core::rect<int32_t> rctSrc(core::position2d<int32_t>(0,0),
-									core::dimension2di(*reinterpret_cast<const core::dimension2du*>(texture->getSize())));
-
-			driver->draw2DImage(texture, rctDest, rctSrc);
-		}
-	}
+    driver->setTransform(video::E4X3TS_WORLD, concatenateBFollowedByA(translate, scale));
+    driver->setMaterial(mat);
+    driver->drawMeshBuffer(buffer);
 }
 
 
@@ -266,16 +270,16 @@ void CSkyBoxSceneNode::OnRegisterSceneNode()
 //! This function is needed for inserting the node into the scene hirachy on a
 //! optimal position for minimizing renderstate changes, but can also be used
 //! to directly modify the material of a scene node.
-video::SGPUMaterial& CSkyBoxSceneNode::getMaterial(uint32_t i)
+video::SGPUMaterial& CSkyBoxSceneNode::getMaterial()
 {
-	return Material[i];
+    return mat;
 }
 
 
 //! returns amount of materials used by this scene node.
 uint32_t CSkyBoxSceneNode::getMaterialCount() const
 {
-	return 6;
+    return 1;
 }
 
 

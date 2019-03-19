@@ -121,6 +121,57 @@ int main()
 	driver->setTextureCreationFlag(video::ETCF_ALWAYS_32_BIT, true);
 	driver->setTextureCreationFlag(video::ETCF_CREATE_MIP_MAPS, false);
 
+
+    //Test creating cubemap
+    uint32_t zero[] = { 0,0,0 };
+    uint32_t size[] = { 64,64, 6 };
+
+    asset::CImageData *imgData = new asset::CImageData(NULL, zero, size, 0, asset::E_FORMAT::EF_R8G8B8_UNORM);
+    uint8_t *iter = (uint8_t*)imgData->getData();
+
+    for (int i = 0; i < (64 * 64); ++i) {
+        *(iter++) = 255;
+        *(iter++) = 0;
+        *(iter++) = 0;
+    }
+
+    for (int i = 0; i < (64 * 64); ++i) {
+        *(iter++) = 0;
+        *(iter++) = 255;
+        *(iter++) = 0;
+    }
+
+    for (int i = 0; i < (64 * 64); ++i) {
+        *(iter++) = 0;
+        *(iter++) = 0;
+        *(iter++) = 255;
+    }
+
+    for (int i = 0; i < (64 * 64); ++i) {
+        *(iter++) = 255;
+        *(iter++) = 255;
+        *(iter++) = 255;
+    }
+    for (int i = 0; i < (64 * 64); ++i) {
+        *(iter++) = 0;
+        *(iter++) = 0;
+        *(iter++) = 0;
+    }
+
+    for (int i = 0; i < (64 * 64); ++i) {
+        *(iter++) = 255;
+        *(iter++) = 0;
+        *(iter++) = 255;
+    }
+
+
+    core::vector<asset::CImageData*> data;
+    data.push_back(imgData);
+
+    asset::ICPUTexture *cpuTex = asset::ICPUTexture::create(data, video::ITexture::ETT_CUBE_MAP);
+    video::ITexture *tex = driver->getGPUObjectsFromAssets(&cpuTex, (&cpuTex) + 1).front();
+
+
 	// create skybox and skydome
 	switch (c)
 	{
@@ -139,12 +190,7 @@ int main()
             core::vector<video::ITexture*> gputextures = driver->getGPUObjectsFromAssets(cputextures, cputextures+6);
 
             smgr->addSkyBoxSceneNode(
-                gputextures[0],
-                gputextures[1],
-                gputextures[2],
-                gputextures[3],
-                gputextures[4],
-                gputextures[5]
+               tex
             );
         }
             break;
@@ -244,9 +290,9 @@ int main()
             desc->drop();
 
 
-            driver->setTransform(video::E4X3TS_WORLD,core::matrix4x3());
-            driver->setMaterial(material);
-            driver->drawMeshBuffer(mb);
+            //driver->setTransform(video::E4X3TS_WORLD,core::matrix4x3());
+           // driver->setMaterial(material);
+           // driver->drawMeshBuffer(mb);
             mb->drop();
 
             upStreamBuff->multi_free(2u,(uint32_t*)&offsets,(uint32_t*)&sizes,driver->placeFence());
