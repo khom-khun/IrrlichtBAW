@@ -7,7 +7,6 @@
 #include "ISceneManager.h"
 #include "ICameraSceneNode.h"
 #include "IGPUProgrammingServices.h"
-#include "IShaderConstantSetCallBack.h"
 
 #include "os.h"
 
@@ -36,7 +35,9 @@ layout(location = 0) uniform samplerCube cubeMap;
 in vec4 tCoords;
 
 void main(){
-    color = texture(cubeMap, tCoords.xyz);
+    vec4 c = texture(cubeMap, tCoords.xyz);
+    c.w = 1.0;
+    color = c;
 }
 
 )";
@@ -45,93 +46,7 @@ void main(){
 namespace irr
 {
 
-    class SkyboxMVPCallback : public video::IShaderConstantSetCallBack
-    {
-        int32_t mvpUniformLocation;
-        video::E_SHADER_CONSTANT_TYPE mvpUniformType;
-    public:
-        SkyboxMVPCallback() : mvpUniformLocation(-1), mvpUniformType(video::ESCT_FLOAT_VEC3) {}
 
-        virtual void PostLink(video::IMaterialRendererServices* services, const video::E_MATERIAL_TYPE& materialType, const core::vector<video::SConstantLocationNamePair>& constants)
-        {
-            mvpUniformLocation = constants[0].location;
-            mvpUniformType = constants[0].type;
-        }
-
-        virtual void OnSetConstants(video::IMaterialRendererServices* services, int32_t userData)
-        {
-            services->setShaderConstant(services->getVideoDriver()->getTransform(video::EPTS_PROJ_VIEW_WORLD).pointer(), mvpUniformLocation, mvpUniformType, 1);
-        }
-
-        virtual void OnUnsetMaterial() {}
-    };
-
-video::IGPUMeshBuffer *createCube(video::IVideoDriver *driver) {
-    
-    float vertexData[] = {        
-        -1.0f,  1.0f, -1.0f,
-        -1.0f, -1.0f, -1.0f,
-         1.0f, -1.0f, -1.0f,
-         1.0f, -1.0f, -1.0f,
-         1.0f,  1.0f, -1.0f,
-        -1.0f,  1.0f, -1.0f,
-
-        -1.0f, -1.0f,  1.0f,
-        -1.0f, -1.0f, -1.0f,
-        -1.0f,  1.0f, -1.0f,
-        -1.0f,  1.0f, -1.0f,
-        -1.0f,  1.0f,  1.0f,
-        -1.0f, -1.0f,  1.0f,
-
-         1.0f, -1.0f, -1.0f,
-         1.0f, -1.0f,  1.0f,
-         1.0f,  1.0f,  1.0f,
-         1.0f,  1.0f,  1.0f,
-         1.0f,  1.0f, -1.0f,
-         1.0f, -1.0f, -1.0f,
-
-        -1.0f, -1.0f,  1.0f,
-        -1.0f,  1.0f,  1.0f,
-         1.0f,  1.0f,  1.0f,
-         1.0f,  1.0f,  1.0f,
-         1.0f, -1.0f,  1.0f,
-        -1.0f, -1.0f,  1.0f,
-
-        -1.0f,  1.0f, -1.0f,
-         1.0f,  1.0f, -1.0f,
-         1.0f,  1.0f,  1.0f,
-         1.0f,  1.0f,  1.0f,
-        -1.0f,  1.0f,  1.0f,
-        -1.0f,  1.0f, -1.0f,
-
-        -1.0f, -1.0f, -1.0f,
-        -1.0f, -1.0f,  1.0f,
-         1.0f, -1.0f, -1.0f,
-         1.0f, -1.0f, -1.0f,
-        -1.0f, -1.0f,  1.0f,
-         1.0f, -1.0f,  1.0f
-    };
-
-    auto upBuf = driver->getDefaultUpStreamingBuffer();
-    const void *dTP[] = { vertexData };
-    uint32_t offsets[] = { video::StreamingTransientDataBufferMT<>::invalid_address };
-    uint32_t alignments[] = { sizeof(decltype(vertexData[0u])) };
-    uint32_t sizes[] = { sizeof(vertexData) };
-
-    upBuf->multi_place(1u, (const void* const*)dTP, (uint32_t*)offsets, (uint32_t*)sizes, (uint32_t*)alignments);
-
-    auto buf = upBuf->getBuffer();
-    video::IGPUMeshDataFormatDesc *desc = driver->createGPUMeshDataFormatDesc();
-    desc->setVertexAttrBuffer(buf, asset::EVAI_ATTR0, asset::EF_R32G32B32_SFLOAT, sizeof(float) * 3, offsets[0]);
-    video::IGPUMeshBuffer *mb = new video::IGPUMeshBuffer;
-    mb->setMeshDataAndFormat(desc);
-    mb->setIndexType(asset::EIT_UNKNOWN);
-    mb->setIndexCount(36);
-    desc->drop();
-    mb->grab();
-    return mb;
-
-}
 
 namespace scene
 {
@@ -158,23 +73,7 @@ CSkyBoxSceneNode::CSkyBoxSceneNode(video::ITexture *cubemap,
 	mat.TextureLayer[0].SamplingParams.TextureWrapU = video::ETC_CLAMP_TO_EDGE;
 	mat.TextureLayer[0].SamplingParams.TextureWrapV = video::ETC_CLAMP_TO_EDGE;
 
-	/* Hey, I am no artist, but look at that
-	   cool ASCII art I made! ;)
-
-       -111         111
-          /6--------/5        y
-         /  |      / |        ^  z
-        /   |   11-1 |        | /
-  -11-1 3---------2  |        |/
-        |   7- - -| -4 1-11    *---->x
-        | -1-11   |  /       3-------|2
-        |/        | /         |    //|
-        0---------1/          |  //  |
-     -1-1-1     1-1-1         |//    |
-	                     0--------1
-	*/
 	video::IVideoDriver* driver = SceneManager->getVideoDriver();
-	// creeate material
     
     SkyboxMVPCallback *callback = new SkyboxMVPCallback;
     mat.MaterialType = (video::E_MATERIAL_TYPE)driver->getGPUProgrammingServices()->addHighLevelShaderMaterial(vS, nullptr, nullptr, nullptr, fS, 3, video::EMT_SOLID, callback, 0);
@@ -182,9 +81,9 @@ CSkyBoxSceneNode::CSkyBoxSceneNode(video::ITexture *cubemap,
 
    
 	mat.setTexture(0, cubemap);
-    buffer = createCube(driver);
+    buffer = createBuffer();
 
-
+    
 }
 
 CSkyBoxSceneNode::CSkyBoxSceneNode(CSkyBoxSceneNode* other,
@@ -215,25 +114,6 @@ void CSkyBoxSceneNode::render()
 	if (!camera || !driver || !canProceedPastFence())
 		return;
 
-	/*if ( !camera->isOrthogonal() )
-	{
-		// draw perspective skybox
-
-		core::matrix4x3 translate(AbsoluteTransformation);
-		translate.setTranslation(camera->getAbsolutePosition());
-
-		// Draw the sky box between the near and far clip plane
-		const float viewDistance = (camera->getNearValue() + camera->getFarValue()) * 0.5f;
-		core::matrix4x3 scale;
-		scale.setScale(core::vector3df(viewDistance, viewDistance, viewDistance));
-
-		driver->setTransform(video::E4X3TS_WORLD, concatenateBFollowedByA(translate,scale));
-
-	
-			driver->setMaterial(material);
-			driver->drawMeshBuffer(cube);
-
-	}*/
     core::matrix4x3 translate(AbsoluteTransformation);
     translate.setTranslation(camera->getAbsolutePosition());
 
@@ -297,6 +177,73 @@ ISceneNode* CSkyBoxSceneNode::clone(IDummyTransformationSceneNode* newParent, IS
 	if ( newParent )
 		nb->drop();
 	return nb;
+}
+
+video::IGPUMeshBuffer* CSkyBoxSceneNode::createBuffer() 
+{
+    video::IVideoDriver* driver = SceneManager->getVideoDriver();
+    float vertexData[] = {
+    -1.0f,  1.0f, -1.0f,
+    -1.0f, -1.0f, -1.0f,
+     1.0f, -1.0f, -1.0f,
+     1.0f, -1.0f, -1.0f,
+     1.0f,  1.0f, -1.0f,
+    -1.0f,  1.0f, -1.0f,
+
+    -1.0f, -1.0f,  1.0f,
+    -1.0f, -1.0f, -1.0f,
+    -1.0f,  1.0f, -1.0f,
+    -1.0f,  1.0f, -1.0f,
+    -1.0f,  1.0f,  1.0f,
+    -1.0f, -1.0f,  1.0f,
+
+     1.0f, -1.0f, -1.0f,
+     1.0f, -1.0f,  1.0f,
+     1.0f,  1.0f,  1.0f,
+     1.0f,  1.0f,  1.0f,
+     1.0f,  1.0f, -1.0f,
+     1.0f, -1.0f, -1.0f,
+
+    -1.0f, -1.0f,  1.0f,
+    -1.0f,  1.0f,  1.0f,
+     1.0f,  1.0f,  1.0f,
+     1.0f,  1.0f,  1.0f,
+     1.0f, -1.0f,  1.0f,
+    -1.0f, -1.0f,  1.0f,
+
+    -1.0f,  1.0f, -1.0f,
+     1.0f,  1.0f, -1.0f,
+     1.0f,  1.0f,  1.0f,
+     1.0f,  1.0f,  1.0f,
+    -1.0f,  1.0f,  1.0f,
+    -1.0f,  1.0f, -1.0f,
+
+    -1.0f, -1.0f, -1.0f,
+    -1.0f, -1.0f,  1.0f,
+     1.0f, -1.0f, -1.0f,
+     1.0f, -1.0f, -1.0f,
+    -1.0f, -1.0f,  1.0f,
+     1.0f, -1.0f,  1.0f
+    };
+
+    auto upBuf = driver->getDefaultUpStreamingBuffer();
+    const void *dTP[] = { vertexData };
+    uint32_t offsets[] = { video::StreamingTransientDataBufferMT<>::invalid_address };
+    uint32_t alignments[] = { sizeof(decltype(vertexData[0u])) };
+    uint32_t sizes[] = { sizeof(vertexData) };
+
+    upBuf->multi_place(1u, (const void* const*)dTP, (uint32_t*)offsets, (uint32_t*)sizes, (uint32_t*)alignments);
+
+    auto buf = upBuf->getBuffer();
+    video::IGPUMeshDataFormatDesc *desc = driver->createGPUMeshDataFormatDesc();
+    desc->setVertexAttrBuffer(buf, asset::EVAI_ATTR0, asset::EF_R32G32B32_SFLOAT, sizeof(float) * 3, offsets[0]);
+    video::IGPUMeshBuffer *mb = new video::IGPUMeshBuffer;
+    mb->setMeshDataAndFormat(desc);
+    mb->setIndexType(asset::EIT_UNKNOWN);
+    mb->setIndexCount(36);
+    desc->drop();
+    mb->grab();
+    return mb;
 }
 
 } // end namespace scene

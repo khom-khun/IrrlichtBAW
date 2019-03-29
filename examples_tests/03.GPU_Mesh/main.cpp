@@ -163,7 +163,7 @@ int main()
         *(iter++) = 0;
         *(iter++) = 255;
     }
-
+    //OutputCube.dds
 
     core::vector<asset::CImageData*> data;
     data.push_back(imgData);
@@ -179,18 +179,14 @@ int main()
         {
             asset::IAssetManager& assetMgr = device->getAssetManager();
             asset::IAssetLoader::SAssetLoadParams lparams;
+            
             asset::ICPUTexture* cputextures[] {
-                static_cast<asset::ICPUTexture*>(assetMgr.getAsset("../../media/irrlicht2_up.jpg", lparams)),
-                static_cast<asset::ICPUTexture*>(assetMgr.getAsset("../../media/irrlicht2_dn.jpg", lparams)),
-                static_cast<asset::ICPUTexture*>(assetMgr.getAsset("../../media/irrlicht2_lf.jpg", lparams)),
-                static_cast<asset::ICPUTexture*>(assetMgr.getAsset("../../media/irrlicht2_rt.jpg", lparams)),
-                static_cast<asset::ICPUTexture*>(assetMgr.getAsset("../../media/irrlicht2_ft.jpg", lparams)),
-                static_cast<asset::ICPUTexture*>(assetMgr.getAsset("../../media/irrlicht2_bk.jpg", lparams))
+                static_cast<asset::ICPUTexture*>(assetMgr.getAsset("../../media/Brick.dds", lparams))
             };
-            core::vector<video::ITexture*> gputextures = driver->getGPUObjectsFromAssets(cputextures, cputextures+6);
+            core::vector<video::ITexture*> gputextures = driver->getGPUObjectsFromAssets(cputextures, cputextures+1);
 
             smgr->addSkyBoxSceneNode(
-               tex
+                gputextures.front()
             );
         }
             break;

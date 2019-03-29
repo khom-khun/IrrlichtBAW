@@ -74,6 +74,7 @@ void DDSDecodePixelFormat(CImageLoaderDDS::ddsBuffer *dds, CImageLoaderDDS::eDDS
 	/* extract fourCC */
 	const uint32_t fourCC = dds->pixelFormat.fourCC;
 
+
 	/* test it */
 	if( fourCC == 0 )
 	{
@@ -81,19 +82,23 @@ void DDSDecodePixelFormat(CImageLoaderDDS::ddsBuffer *dds, CImageLoaderDDS::eDDS
 	    bool hasRGB = false;
 	    bool hasLuma = false;
 	    uint32_t bitDepth = dds->pixelFormat.privateFormatBitCount;
-
+        
 	    if (dds->pixelFormat.flags&0x3)
 	    {
             hasAlpha = true;
+            printf("Has alpha\n");
 	    }
 	    if (dds->pixelFormat.flags&0x40)
 	    {
             hasRGB = true;
+            printf("Has rgb\n");
 	    }
 	    if (dds->pixelFormat.flags&0x20000)
 	    {
             hasLuma = true;
+            printf("Has luma\n");
 	    }
+        printf("%i 0x%.8X 0x%.8X \n", bitDepth, dds->pixelFormat.rBitMask, dds->pixelFormat.flags);
 
         if (bitDepth==32&&(dds->pixelFormat.rBitMask&0x00ff0000)&&hasRGB&&hasAlpha)
             *pf = CImageLoaderDDS::DDS_PF_ARGB8888;
@@ -101,6 +106,8 @@ void DDSDecodePixelFormat(CImageLoaderDDS::ddsBuffer *dds, CImageLoaderDDS::eDDS
             *pf = CImageLoaderDDS::DDS_PF_ABGR8888;
         else if (bitDepth==24&&(dds->pixelFormat.rBitMask&0x00ff0000)&&hasRGB)
             *pf = CImageLoaderDDS::DDS_PF_RGB888;
+        else if (bitDepth == 32 && (dds->pixelFormat.rBitMask & 0x00ff0000) && hasRGB)
+            *pf = CImageLoaderDDS::DDS_PF_ARGB8888;
         else if (bitDepth==16&&(dds->pixelFormat.rBitMask&0x7c00)&&hasRGB&&hasAlpha)
             *pf = CImageLoaderDDS::DDS_PF_ARGB1555;
         else if (bitDepth==16&&(dds->pixelFormat.rBitMask&0xf800)&&hasRGB)
@@ -170,6 +177,12 @@ int32_t DDSGetInfo(CImageLoaderDDS::ddsBuffer *dds, int32_t *width, int32_t *hei
 }
 
 
+bool DDSVerifyCubemap(const CImageLoaderDDS::ddsCaps &caps) 
+{
+    if (caps.caps2 & 0x200) return true;
+    return false;
+}
+
 } // end anonymous namespace
 
 
@@ -202,7 +215,11 @@ asset::IAsset* CImageLoaderDDS::loadAsset(io::IReadFile* _file, const asset::IAs
 
 	ddsBuffer header;
 	_file->read(&header, sizeof(header)-4);
+    
 
+    video::ITexture::E_TEXTURE_TYPE type = video::ITexture::E_TEXTURE_TYPE::ETT_COUNT;
+
+    printf("TSDU\n");
 	if ( 0 == DDSGetInfo( &header, &width, &height, &depth, &pixelFormat) )
 	{
 	    if (header.flags & 0x20000)//DDSD_MIPMAPCOUNT)
@@ -211,10 +228,19 @@ asset::IAsset* CImageLoaderDDS::loadAsset(io::IReadFile* _file, const asset::IAs
             mipmapCnt = 1;
 
 
+     
+        if (DDSVerifyCubemap(header.caps)) {
+            depth = 6;
+            type = video::ITexture::E_TEXTURE_TYPE::ETT_CUBE_MAP;
+        }
+
+
         for (int32_t i=0; i<mipmapCnt; i++)
         {
             uint32_t zeroDummy[3] = {0,0,0};
-            uint32_t mipSize[3] = {0,height,depth};
+            uint32_t mipSize[3] = {height,height,depth};
+  
+
             uint32_t& tmpWidth = mipSize[0];
             switch( pixelFormat )
             {
@@ -248,8 +274,11 @@ asset::IAsset* CImageLoaderDDS::loadAsset(io::IReadFile* _file, const asset::IAs
                 case DDS_PF_ABGR8888:
                     /* fixme: support other [a]rgb formats */
                     {
-                        colorFormat = pixelFormat==DDS_PF_ABGR8888 ? asset::EF_R8G8B8A8_UNORM:asset::EF_B8G8R8A8_UNORM;
-                        asset::CImageData* data = new asset::CImageData(NULL,zeroDummy,mipSize,i,colorFormat,4);
+                        colorFormat = pixelFormat==DDS_PF_ABGR8888 ? asset::EF_R8G8B8A8_UNORM:asset::EF_B8G8R8A8_UNORM; 
+                        mipSize[0] = 512;
+                        mipSize[1] = 512;
+                        mipSize[2] = 6;
+                        asset::CImageData* data = new asset::CImageData(NULL,zeroDummy,mipSize,i,colorFormat);
                         _file->read(data->getData(),data->getImageDataSizeInBytes());
                         images.push_back(data);
                     }
@@ -334,7 +363,7 @@ asset::IAsset* CImageLoaderDDS::loadAsset(io::IReadFile* _file, const asset::IAs
         }
 	}
 
-	asset::ICPUTexture* tex = asset::ICPUTexture::create(images);
+	asset::ICPUTexture* tex = asset::ICPUTexture::create(images, type);
     for (auto img : images)
         img->drop();
     return tex;

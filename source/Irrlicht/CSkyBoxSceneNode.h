@@ -7,6 +7,9 @@
 
 #include "ISceneNode.h"
 #include "irr/video/IGPUMeshBuffer.h"
+#include "IShaderConstantSetCallBack.h"
+#include "IVideoDriver.h"
+#include "IGPUProgrammingServices.h"
 
 namespace irr
 {
@@ -22,6 +25,9 @@ namespace scene
                 
                 buffer->drop();
             }
+
+          
+
 
         public:
             //! constructor
@@ -60,6 +66,28 @@ namespace scene
             virtual ISceneNode* clone(IDummyTransformationSceneNode* newParent=0, ISceneManager* newManager=0);
 
         private:
+
+            virtual video::IGPUMeshBuffer *createBuffer();
+            class SkyboxMVPCallback : public video::IShaderConstantSetCallBack
+            {
+                int32_t mvpUniformLocation;
+                video::E_SHADER_CONSTANT_TYPE mvpUniformType;
+            public:
+                SkyboxMVPCallback() : mvpUniformLocation(-1), mvpUniformType(video::ESCT_FLOAT_VEC3) {}
+
+                virtual void PostLink(video::IMaterialRendererServices* services, const video::E_MATERIAL_TYPE& materialType, const core::vector<video::SConstantLocationNamePair>& constants)
+                {
+                    mvpUniformLocation = constants[0].location;
+                    mvpUniformType = constants[0].type;
+                }
+
+                virtual void OnSetConstants(video::IMaterialRendererServices* services, int32_t userData)
+                {
+                    services->setShaderConstant(services->getVideoDriver()->getTransform(video::EPTS_PROJ_VIEW_WORLD).pointer(), mvpUniformLocation, mvpUniformType, 1);
+                }
+
+                virtual void OnUnsetMaterial() {}
+            };
 
             core::aabbox3d<float> Box;
             video::IGPUMeshBuffer* buffer;
