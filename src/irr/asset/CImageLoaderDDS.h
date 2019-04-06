@@ -26,6 +26,7 @@ public:
     {
         DDS_PF_ARGB8888,
         DDS_PF_ABGR8888,
+        DDS_PF_RGBX8888,
         DDS_PF_RGB888,
         DDS_PF_ARGB1555,
         DDS_PF_RGB565,
@@ -126,7 +127,7 @@ public:
         uint32_t		width;//16
         union
         {
-            int32_t				pitch;
+            int32_t		pitch;
             uint32_t	linearSize;
         };//20
         uint32_t		depth;//24
