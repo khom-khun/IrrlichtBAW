@@ -218,6 +218,8 @@ asset::IAsset* CImageLoaderDDS::loadAsset(io::IReadFile* _file, const asset::IAs
 	_file->read(&header, sizeof(header)-4);
     
 
+
+
     video::ITexture::E_TEXTURE_TYPE type = video::ITexture::E_TEXTURE_TYPE::ETT_COUNT;
 	if ( 0 == DDSGetInfo( &header, &width, &height, &depth, &pixelFormat) )
 	{
@@ -227,8 +229,8 @@ asset::IAsset* CImageLoaderDDS::loadAsset(io::IReadFile* _file, const asset::IAs
             mipmapCnt = 1;
 
 
-     
-        if (DDSVerifyCubemap(header.caps)) {
+        bool isCubeMap = false;
+        if (isCubeMap = DDSVerifyCubemap(header.caps)) {
             depth = 6;
             type = video::ITexture::E_TEXTURE_TYPE::ETT_CUBE_MAP;
         }
@@ -237,8 +239,40 @@ asset::IAsset* CImageLoaderDDS::loadAsset(io::IReadFile* _file, const asset::IAs
         for (int32_t i=0; i<mipmapCnt; i++)
         {
             uint32_t zeroDummy[3] = {0,0,0};
-            uint32_t mipSize[3] = {width,height,depth};
-  
+            uint32_t mipSize[3] = {0,height,depth};
+            uint32_t& tmpWidth = mipSize[0];
+
+            switch (pixelFormat)
+            {
+            case DDS_PF_DXT1:
+            case DDS_PF_DXT2:
+            case DDS_PF_DXT3:
+            case DDS_PF_DXT4:
+            case DDS_PF_DXT5:
+                tmpWidth = width;
+                break;
+            default:
+                tmpWidth = header.pitch;
+                break;
+            }
+            uint32_t& tmpHeight = mipSize[1];
+            uint32_t& tmpDepth = mipSize[2];
+            tmpWidth += (uint32_t(1) << i) - 1;
+            tmpHeight += (uint32_t(1) << i) - 1;
+            if (false)
+                tmpDepth += (uint32_t(1) << i) - 1; //! CHANGE AGAIN FOR 2D ARRAY AND CUBEMAP TEXTURES
+            tmpWidth /= uint32_t(1) << i;
+            tmpHeight /= uint32_t(1) << i;
+            if (false)
+                tmpDepth /= uint32_t(1) << i; //! CHANGE AGAIN FOR 2D ARRAY AND CUBEMAP TEXTURES
+
+            if (isCubeMap) {
+                mipSize[0] = width;
+                mipSize[1] = height;
+                mipSize[2] = depth;
+            }
+
+
             /* decompress */
             asset::E_FORMAT colorFormat = asset::EF_UNKNOWN;
             switch( pixelFormat )
