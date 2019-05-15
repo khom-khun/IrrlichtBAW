@@ -137,6 +137,7 @@ option(IRR_PCH "Enable pre-compiled header" ON)
 option(IRR_FAST_MATH "Enable fast low-precision math" ON)
 
 option(IRR_BUILD_EXAMPLES "Enable building examples" ON)
+option(IRR_BUILD_TUTORIALS "Enable building tutorials" OFF)
 
 option(IRR_BUILD_TOOLS "Enable building tools (just convert2BAW as for now)" ON)
 
@@ -151,4 +152,7 @@ if(IRR_BUILD_TOOLS)
 endif()
 if(IRR_BUILD_EXAMPLES)
 	add_subdirectory(examples_tests)
+endif()
+if(IRR_BUILD_TUTORIALS)
+	add_subdirectory(tutorials_test)
 endif()
