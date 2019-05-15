@@ -9,8 +9,8 @@ public:
 	BaseReceiver();
 	bool OnEvent(const irr::SEvent &e);
 
-	bool quit;
-
 };
+
+void writeScreenshot(irr::IrrlichtDevice *device, irr::core::dimension2d<uint32_t>);
 
 #endif
