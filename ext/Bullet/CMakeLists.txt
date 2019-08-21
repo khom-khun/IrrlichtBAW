@@ -16,7 +16,6 @@ set(IRR_EXT_BULLET_H
   BulletUtility.h 
   CDebugRender.h 
   CInstancedMotionState.h
-  CPhysicsWorld.h
   IMotionStateBase.h
 )
 
@@ -24,10 +23,8 @@ set(IRR_EXT_BULLET_SRC
   ${BULLETCOLLISION_CPP}
   ${BULLETDYNAMICS_CPP}
   ${LINEARMATH_CPP}
-  BulletUtility.cpp
   CDebugRender.cpp
   CInstancedMotionState.cpp
-  CPhysicsWorld.cpp
 )
 
 set(IRR_EXT_BULLET_EXTERNAL_INCLUDE

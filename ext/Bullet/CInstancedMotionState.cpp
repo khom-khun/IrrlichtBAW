@@ -14,7 +14,5 @@ void CInstancedMotionState::getWorldTransform(btTransform &worldTrans) const {
 }
 
 void CInstancedMotionState::setWorldTransform(const btTransform &worldTrans) {
-    
-
     m_node->setInstanceTransform(m_index, convertbtTransform(worldTrans).getAsRetardedIrrlichtMatrix());
 }

@@ -31,11 +31,6 @@ public:
     void *m_userPointer;
 
 protected:
-
-
-    friend class CPhysicsWorld;
-
-
 };
 
 }

@@ -5,7 +5,6 @@
 #include "BulletCollision/NarrowPhaseCollision/btRaycastCallback.h"
 
 #include "../../ext/Bullet/BulletUtility.h"
-#include "../../ext/Bullet/CPhysicsWorld.h"
 
 #include "../../ext/Bullet/CInstancedMotionState.h"
 #include "../../ext/Bullet/CDebugRender.h"
@@ -29,7 +28,7 @@ const float instanceLoDDistances[] = {8.f,50.f};
 
 bool quit = false;
 
-void handleRaycast(scene::ICameraSceneNode *cam, ext::Bullet3::CPhysicsWorld *physicsWorld) {
+void handleRaycast(scene::ICameraSceneNode *cam, btDiscreteDynamicsWorld *world) {
     //TODO - find way to extract rigidybody from closeRay (?)
 
     using namespace ext::Bullet3;
@@ -43,10 +42,10 @@ void handleRaycast(scene::ICameraSceneNode *cam, ext::Bullet3::CPhysicsWorld *ph
     btCollisionWorld::ClosestRayResultCallback closeRay(tobtVec3(to), tobtVec3(from));
     closeRay.m_flags = btTriangleRaycastCallback::kF_UseSubSimplexConvexCastRaytest;
     
-    physicsWorld->getWorld()->rayTest(tobtVec3(from), tobtVec3(to), closeRay);
+    world->rayTest(tobtVec3(from), tobtVec3(to), closeRay);
 
     if (closeRay.hasHit()) {
-        physicsWorld->getWorld()->getDebugDrawer()->drawSphere(
+		world->getDebugDrawer()->drawSphere(
             tobtVec3(from).lerp(tobtVec3(to), closeRay.m_closestHitFraction), 2, btVector3(1, 0, 0)
         );
 
@@ -55,14 +54,35 @@ void handleRaycast(scene::ICameraSceneNode *cam, ext::Bullet3::CPhysicsWorld *ph
 
 }
 
+//Can't get thru world for freeSimpleBulletWorld! :(
+btDefaultCollisionConfiguration config;
+
+btDiscreteDynamicsWorld *createSimpleBulletWorld() {
+	using namespace ext;
+	
+	return Bullet3::createType<btDiscreteDynamicsWorld>(
+		Bullet3::createType<btCollisionDispatcher>(&config),
+		Bullet3::createType<btDbvtBroadphase>(),
+		Bullet3::createType<btSequentialImpulseConstraintSolver>(),
+		&config
+	);
+}
+
+void freeSimpleBulletWorld(btDiscreteDynamicsWorld *world) {
+	using namespace ext;
+	Bullet3::freeType(world->getDispatcher());
+	Bullet3::freeType(world->getPairCache());
+	Bullet3::freeType(world->getConstraintSolver());
+	Bullet3::freeType(world);
+}
+
 
 //!Disptaches Raycast when R is pressed
 class MyEventReceiver : public IEventReceiver
 {
 public:
 
-	MyEventReceiver(scene::ICameraSceneNode *cam, ext::Bullet3::CPhysicsWorld *physicsWorld):
-        physicsWorld(physicsWorld),
+	MyEventReceiver(scene::ICameraSceneNode *cam):
         cam(cam)
 	{
 	}
@@ -76,11 +96,6 @@ public:
             case irr::KEY_KEY_Q: // switch wire frame mode
                 quit = true;
                 return true;
-            case irr::KEY_KEY_R: //Bullet raycast
-                handleRaycast(cam, physicsWorld);
-                return true;
-            
-
             default:
                 break;
             }
@@ -94,8 +109,6 @@ public:
 
 private:
     scene::ICameraSceneNode *cam;
-    ext::Bullet3::CPhysicsWorld *physicsWorld;
-
 };
 
 const char* uniformNames[] =
@@ -273,27 +286,29 @@ int main()
     
     // ! - INITIALIZE BULLET WORLD + FLAT PLANE FOR TESTING
 //------------------------------------------------------------------
+	
+	btDiscreteDynamicsWorld *dynamicWorld = createSimpleBulletWorld();
+	dynamicWorld->setGravity(btVector3(0, -5, 0));
 
-    ext::Bullet3::CPhysicsWorld *world = _IRR_NEW(irr::ext::Bullet3::CPhysicsWorld);
-    world->getWorld()->setGravity(btVector3(0, -5, 0));
+
 
 
     core::matrix3x4SIMD baseplateMat;
     baseplateMat.setTranslation(core::vectorSIMDf(0.0, -1.0, 0.0));
 
-    ext::Bullet3::CPhysicsWorld::RigidBodyData data2;
-    data2.mass = 0.0f;
-    data2.shape = world->createbtObject<btBoxShape>(btVector3(300, 1, 300));
-    data2.trans = baseplateMat;
 
-    btRigidBody *body2 = world->createRigidBody(data2);
-    world->bindRigidBody(body2);
+	ext::Bullet3::RigidBodyData baseplateData;
+	baseplateData.shape = ext::Bullet3::createType<btBoxShape>(btVector3(300, 1, 300));
+	baseplateData.trans = baseplateMat;
+
+	btRigidBody *baseplate = ext::Bullet3::createRigidBodyFrom(baseplateData);
+	dynamicWorld->addRigidBody(baseplate);
 
     //------------------------------------------------------------------
 
 
     
-    MyEventReceiver receiver(camera, world);
+    MyEventReceiver receiver(camera);
 	device->setEventReceiver(&receiver);
 
     
@@ -350,30 +365,18 @@ int main()
 
 
 
+    irr::ext::Bullet3::RigidBodyData instanceBodyData;
+	instanceBodyData.mass = 2.0f;
+	instanceBodyData.shape = ext::Bullet3::createType<btBoxShape>(btVector3(0.5, 0.5, 0.5));
 
-    ext::Bullet3::CDebugRender *debugDraw = world->createbtObject<ext::Bullet3::CDebugRender>(driver);
-    world->getWorld()->setDebugDrawer(debugDraw);
-
-    
-
-    btRigidBody **bodies = _IRR_NEW_ARRAY(btRigidBody*, towerHeight * towerWidth);
-
-
-
-    irr::ext::Bullet3::CPhysicsWorld::RigidBodyData data3;
-    data3.mass = 2.0f;
-    data3.shape = world->createbtObject<btBoxShape>(btVector3(0.5, 0.5, 0.5));
-
-   
     btVector3 inertia;
-    data3.shape->calculateLocalInertia(data3.mass, inertia);
-
-    data3.inertia = ext::Bullet3::frombtVec3(inertia);
-
+	instanceBodyData.shape->calculateLocalInertia(instanceBodyData.mass, inertia);
+	instanceBodyData.inertia = ext::Bullet3::frombtVec3(inertia);
 
 
     //! Special Juice for INSTANCING
     uint32_t instances[towerHeight*towerWidth];
+	btRigidBody *bodies[towerHeight*towerWidth];
     for (size_t y=0; y<towerHeight; y++)
     for (size_t z=0; z<towerWidth; z++)
     {
@@ -394,16 +397,25 @@ int main()
 
 
 
-        data3.trans = instancedMat;
+		instanceBodyData.trans = instancedMat;
 
-        bodies[y*towerWidth + z] = world->createRigidBody(data3);
-
+        bodies[y*towerWidth + z] = ext::Bullet3::createRigidBodyFrom(instanceBodyData);		
         bodies[y*towerWidth + z]->setUserPointer((uint32_t*)(y*towerWidth + z));
 
-        world->bindRigidBody<irr::ext::Bullet3::CInstancedMotionState>(bodies[y*towerWidth + z], node, instances[y*towerWidth + z]);
+		bodies[y*towerWidth + z]->setMotionState(ext::Bullet3::createType<ext::Bullet3::CInstancedMotionState>(
+			node, instances[y * towerWidth + z]
+		));
+
+		dynamicWorld->addRigidBody(bodies[y*towerWidth + z]);
+
+        
 
 
     }
+
+	ext::Bullet3::CDebugRender *debugDraw = ext::Bullet3::createType<ext::Bullet3::CDebugRender>(driver);
+	dynamicWorld->setDebugDrawer(debugDraw);
+
 
     uint64_t timeDiff = 0;
 	while(device->run()&&(!quit))
@@ -422,13 +434,13 @@ int main()
         
         smgr->drawAll();
 
-        world->getWorld()->debugDrawWorld();
-        handleRaycast(camera, world);
+		dynamicWorld->debugDrawWorld();
+        handleRaycast(camera, dynamicWorld);
         debugDraw->draw();
        
 		driver->endScene();
 
-        world->getWorld()->stepSimulation(timeDiff);
+		dynamicWorld->stepSimulation(timeDiff);
        
 
         
@@ -448,28 +460,26 @@ int main()
 	}
 
 
+	// CLEANUP BULLET OBJECTS
+	dynamicWorld->removeRigidBody(baseplate);
 
-
-    world->unbindRigidBody(body2, false);
-    world->deleteRigidBody(body2);
-    world->deletebtObject(data2.shape);
-
+	ext::Bullet3::freeType(baseplateData.shape);
+	ext::Bullet3::freeType(baseplate);
 
     for (size_t i = 0; i < towerHeight * towerWidth; ++i) {
-        world->unbindRigidBody(bodies[i]);
-        world->deleteRigidBody(bodies[i]);
+		dynamicWorld->removeRigidBody(bodies[i]);
+		
+		ext::Bullet3::freeType(bodies[i]->getMotionState());
+		ext::Bullet3::freeType(bodies[i]);
     }
-
-    _IRR_DELETE_ARRAY(bodies, towerHeight * towerWidth);
-    world->deletebtObject(data3.shape);
+	ext::Bullet3::freeType(instanceBodyData.shape);
+	ext::Bullet3::freeType(dynamicWorld);
 
    
     node->removeInstances(towerHeight*towerWidth,instances);
     node->remove();
 
     gpumesh->drop();
-
-    world->drop();
 
     //create a screenshot
 	video::IImage* screenshot = driver->createImage(asset::EF_B8G8R8A8_UNORM,params.WindowSize);
