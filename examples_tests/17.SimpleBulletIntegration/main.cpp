@@ -3,11 +3,14 @@
 #include "../source/Irrlicht/COpenGLExtensionHandler.h"
 #include <btBulletDynamicsCommon.h>
 #include "BulletCollision/NarrowPhaseCollision/btRaycastCallback.h"
+#include "BulletCollision/CollisionShapes/btShapeHull.h"
 
 #include "../../ext/Bullet/BulletUtility.h"
+#include "../../ext/Bullet/MeshConverter.h"
 
 #include "../../ext/Bullet/CInstancedMotionState.h"
 #include "../../ext/Bullet/CDebugRender.h"
+
 
 using namespace irr;
 using namespace core;
@@ -27,6 +30,9 @@ using namespace scene;
 const float instanceLoDDistances[] = {8.f,50.f};
 
 bool quit = false;
+
+btCollisionShape *cowShapes[3];
+int cowShapeAt = 0;
 
 void handleRaycast(scene::ICameraSceneNode *cam, btDiscreteDynamicsWorld *world) {
     //TODO - find way to extract rigidybody from closeRay (?)
@@ -85,6 +91,9 @@ public:
 	MyEventReceiver(scene::ICameraSceneNode *cam):
         cam(cam)
 	{
+		printf("Press Key:\n\t(1): Triangle Mesh Shape\n\t(2):Simplified Convex Hull\n\t(3)Convex Decomposited Shape");
+
+
 	}
 
 	bool OnEvent(const SEvent& event)
@@ -96,6 +105,14 @@ public:
             case irr::KEY_KEY_Q: // switch wire frame mode
                 quit = true;
                 return true;
+			case irr::KEY_KEY_1:
+				cowShapeAt = 0;
+				return true;
+			case irr::KEY_KEY_2:
+				cowShapeAt = 1;
+			case irr::KEY_KEY_3:
+				cowShapeAt = 2;
+
             default:
                 break;
             }
@@ -199,6 +216,45 @@ public:
     virtual void OnUnsetMaterial() {}
 };
 
+class CowCallBack : public video::IShaderConstantSetCallBack
+{
+	int32_t mvpUniformLocation;
+	int32_t cameraDirUniformLocation;
+	int32_t texUniformLocation[4];
+	video::E_SHADER_CONSTANT_TYPE mvpUniformType;
+	video::E_SHADER_CONSTANT_TYPE cameraDirUniformType;
+	video::E_SHADER_CONSTANT_TYPE texUniformType[4];
+public:
+	CowCallBack() : cameraDirUniformLocation(-1), cameraDirUniformType(video::ESCT_FLOAT_VEC3) {}
+
+	virtual void PostLink(video::IMaterialRendererServices* services, const video::E_MATERIAL_TYPE& materialType, const core::vector<video::SConstantLocationNamePair>& constants)
+	{
+		for (size_t i = 0; i < constants.size(); i++)
+		{
+			if (constants[i].name == "MVP")
+			{
+				mvpUniformLocation = constants[i].location;
+				mvpUniformType = constants[i].type;
+			}
+			else if (constants[i].name == "cameraPos")
+			{
+				cameraDirUniformLocation = constants[i].location;
+				cameraDirUniformType = constants[i].type;
+			}
+		}
+	}
+
+	virtual void OnSetConstants(video::IMaterialRendererServices* services, int32_t userData)
+	{
+		core::vectorSIMDf modelSpaceCamPos;
+		modelSpaceCamPos.set(services->getVideoDriver()->getTransform(video::E4X3TS_WORLD_VIEW_INVERSE).getTranslation());
+		services->setShaderConstant(&modelSpaceCamPos, cameraDirUniformLocation, cameraDirUniformType, 1);
+		services->setShaderConstant(services->getVideoDriver()->getTransform(video::EPTS_PROJ_VIEW_WORLD).pointer(), mvpUniformLocation, mvpUniformType, 1);
+	}
+
+	virtual void OnUnsetMaterial() {}
+};
+
 
  asset::IMeshDataFormatDesc<video::IGPUBuffer>* vaoSetupOverride(ISceneManager* smgr, video::IGPUBuffer* instanceDataBuffer, const size_t& dataSizePerInstanceOutput, const asset::IMeshDataFormatDesc<video::IGPUBuffer>* oldVAO, void* userData)
  {
@@ -270,8 +326,6 @@ int main()
                                                         0); //! No custom user data
     cb->drop();
 
-
-
 	scene::ISceneManager* smgr = device->getSceneManager();
 	driver->setTextureCreationFlag(video::ETCF_ALWAYS_32_BIT, true);
 	scene::ICameraSceneNode* camera =
@@ -283,7 +337,11 @@ int main()
     smgr->setActiveCamera(camera);
 	device->getCursorControl()->setVisible(false);
 	
-    
+  
+	
+
+
+
     // ! - INITIALIZE BULLET WORLD + FLAT PLANE FOR TESTING
 //------------------------------------------------------------------
 	
@@ -373,7 +431,6 @@ int main()
 	instanceBodyData.shape->calculateLocalInertia(instanceBodyData.mass, inertia);
 	instanceBodyData.inertia = ext::Bullet3::frombtVec3(inertia);
 
-
     //! Special Juice for INSTANCING
     uint32_t instances[towerHeight*towerWidth];
 	btRigidBody *bodies[towerHeight*towerWidth];
@@ -413,6 +470,59 @@ int main()
 
     }
 
+
+	CowCallBack* cb2 = new CowCallBack();
+	video::E_MATERIAL_TYPE cowMaterialType = (video::E_MATERIAL_TYPE)driver->getGPUProgrammingServices()->addHighLevelShaderMaterialFromFiles("../cow.vert",
+		"", "", "", //! No Geometry or Tessellation Shaders
+		"../cow.frag",
+		3, video::EMT_SOLID, //! 3 vertices per primitive (this is tessellation shader relevant only
+		cb2, //! Our Shader Callback
+		0); //! No custom user data
+	cb2->drop();
+
+
+
+	asset::IAssetLoader::SAssetLoadParams lp;
+	asset::ICPUMesh* cpuMeshCow = static_cast<asset::ICPUMesh*>(device->getAssetManager().getAsset("../../media/cow.obj", lp).getContents().first->get());
+
+
+	btRigidBody *cowBody = nullptr;
+	if (cpuMeshCow) {
+		auto optionOne = ext::Bullet3::createType<btConvexTriangleMeshShape>(ext::Bullet3::convertMeshToCollision(cpuMeshCow->getMeshBuffer(0)));
+		
+		{
+		btShapeHull *hull = ext::Bullet3::createType<btShapeHull>(optionOne);
+		hull->buildHull(optionOne->getMargin());
+		
+		auto optionTwo = ext::Bullet3::createType<btConvexHullShape>();
+		for(int i = 0; i < hull->numVertices(); ++i) {
+			optionTwo->addPoint(hull->getVertexPointer()[i]);
+		}
+
+		cowShapes[0] = optionOne;
+		cowShapes[1] = optionTwo;
+
+		}
+
+		ext::Bullet3::RigidBodyData cowData;
+		cowData.shape = cowShapes[1];
+		cowData.shape->setLocalScaling(btVector3(20, 20, 20));
+		cowBody = ext::Bullet3::createRigidBodyFrom(cowData);
+		dynamicWorld->addRigidBody(cowBody);
+		
+		
+		video::IGPUMesh* gpuMesh = driver->getGPUObjectsFromAssets(&cpuMeshCow, (&cpuMeshCow) + 1).front();
+		auto cowNode = smgr->addMeshSceneNode(gpuMesh);
+		cowNode->setMaterialType(cowMaterialType);
+		cowNode->setScale({20.f, 20.f, 20.f});
+	
+	}
+
+
+
+
+
+
 	ext::Bullet3::CDebugRender *debugDraw = ext::Bullet3::createType<ext::Bullet3::CDebugRender>(driver);
 	dynamicWorld->setDebugDrawer(debugDraw);
 
@@ -439,6 +549,7 @@ int main()
         debugDraw->draw();
        
 		driver->endScene();
+
 
 		dynamicWorld->stepSimulation(timeDiff);
        
