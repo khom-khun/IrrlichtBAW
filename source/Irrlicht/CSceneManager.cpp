@@ -17,7 +17,6 @@
 #include "CSkinnedMeshSceneNode.h"
 #include "irr/video/CGPUSkinnedMesh.h"
 
-#include "CBillboardSceneNode.h"
 #include "CCameraSceneNode.h"
 #include "CMeshSceneNode.h"
 #include "CMeshSceneNodeInstanced.h"
@@ -244,8 +243,8 @@ IMeshSceneNode* CSceneManager::addCubeSceneNode(float size, IDummyTransformation
 		parent = this;
 
 	auto* geomCreator = Device->getAssetManager()->getGeometryCreator();
-	asset::ICPUMesh* cpumesh = geomCreator->createCubeMesh(core::vector3df(size));
-	auto res = SceneManager->getVideoDriver()->getGPUObjectsFromAssets(&cpumesh, (&cpumesh) + 1);
+	auto cpumesh = geomCreator->createCubeMesh(core::vector3df(size));
+	auto res = SceneManager->getVideoDriver()->getGPUObjectsFromAssets(&cpumesh.get(), (&cpumesh.get()) + 1);
 	assert(res->size());
 
 	// its okay to std::move because this was the only copy of the refctd array 
@@ -262,8 +261,8 @@ IMeshSceneNode* CSceneManager::addSphereSceneNode(float radius, int32_t polyCoun
 		parent = this;
 
 	auto* geomCreator = Device->getAssetManager()->getGeometryCreator();
-	asset::ICPUMesh* cpumesh = geomCreator->createSphereMesh(radius, polyCount, polyCount);
-	auto res = SceneManager->getVideoDriver()->getGPUObjectsFromAssets(&cpumesh, (&cpumesh) + 1);
+	auto cpumesh = geomCreator->createSphereMesh(radius, polyCount, polyCount);
+	auto res = SceneManager->getVideoDriver()->getGPUObjectsFromAssets(&cpumesh.get(), (&cpumesh.get()) + 1);
 	assert(res->size());
 
 	// its okay to std::move because ths was the only copy of the rectd array
@@ -407,24 +406,6 @@ ICameraSceneNode* CSceneManager::addCameraSceneNodeFPS(IDummyTransformationScene
 }
 
 
-
-
-//! Adds a billboard scene node to the scene. A billboard is like a 3d sprite: A 2d element,
-//! which always looks to the camera. It is usually used for things like explosions, fire,
-//! lensflares and things like that.
-IBillboardSceneNode* CSceneManager::addBillboardSceneNode(IDummyTransformationSceneNode* parent,
-	const core::dimension2d<float>& size, const core::vector3df& position, int32_t id,
-	video::SColor colorTop, video::SColor colorBottom)
-{
-	if (!parent)
-		parent = this;
-
-	IBillboardSceneNode* node = new CBillboardSceneNode(parent, this, id, position, size,
-		colorTop, colorBottom);
-	node->drop();
-
-	return node;
-}
 
 //! Adds a skybox scene node. A skybox is a big cube with 6 textures on it and
 //! is drawn around the camera position.
@@ -608,9 +589,9 @@ uint32_t CSceneManager::registerNodeForRendering(ISceneNode* node, E_SCENE_NODE_
 	case ESNRP_AUTOMATIC:
 		if (!isCulled(node))
 		{
-			const uint32_t count = node->getMaterialCount();
-
+#ifdef REIMPLEMENT_THIS
 			taken = 0;
+			const uint32_t count = node->getMaterialCount();
 			for (uint32_t i=0; i<count; ++i)
 			{
 				video::IMaterialRenderer* rnd =
@@ -624,7 +605,7 @@ uint32_t CSceneManager::registerNodeForRendering(ISceneNode* node, E_SCENE_NODE_
 					break;
 				}
 			}
-
+#endif
 			// not transparent, register as solid
 			if (!taken)
 			{

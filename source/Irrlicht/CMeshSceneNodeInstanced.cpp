@@ -27,7 +27,7 @@ CMeshSceneNodeInstanced::CMeshSceneNodeInstanced(IDummyTransformationSceneNode* 
     : IMeshSceneNodeInstanced(parent, mgr, id, position, rotation, scale),
     instanceBBoxes(nullptr), instanceBBoxesCount(0), flagQueryForRetrieval(false),
     gpuCulledLodInstanceDataBuffer(), dataPerInstanceOutputSize(0),
-    extraDataInstanceSize(0), dataPerInstanceInputSize(0), cachedMaterialCount(0)
+    extraDataInstanceSize(0), dataPerInstanceInputSize(0)
 {
     #ifdef _IRR_DEBUG
     setDebugName("CMeshSceneNodeInstanced");
@@ -149,8 +149,6 @@ bool CMeshSceneNodeInstanced::setLoDMeshes(const core::vector<MeshLoD>& levelsOf
 
     for (size_t i=0; i<levelsOfDetail.size(); i++)
     {
-        cachedMaterialCount += levelsOfDetail[i].mesh->getMeshBufferCount();
-
         LoDData tmp;
         tmp.distanceSQ = levelsOfDetail[i].lodDistance;
         tmp.distanceSQ *= tmp.distanceSQ;
@@ -162,10 +160,7 @@ bool CMeshSceneNodeInstanced::setLoDMeshes(const core::vector<MeshLoD>& levelsOf
 
             auto meshBuff = core::make_smart_refctd_ptr<video::IGPUMeshBuffer>();
             meshBuff->setBaseVertex(origBuff->getBaseVertex());
-            if (origBuff->isIndexCountGivenByXFormFeedback())
-                meshBuff->setIndexCountFromXFormFeedback(origBuff->getXFormFeedback(),origBuff->getXFormFeedbackStream());
-            else
-                meshBuff->setIndexCount(origBuff->getIndexCount());
+            meshBuff->setIndexCount(origBuff->getIndexCount());
             meshBuff->setIndexBufferOffset(origBuff->getIndexBufferOffset());
             meshBuff->setIndexType(origBuff->getIndexType());
             meshBuff->setPrimitiveType(origBuff->getPrimitiveType());
@@ -496,7 +491,7 @@ void CMeshSceneNodeInstanced::OnRegisterSceneNode()
         for (size_t j=0; j<LoD[i].mesh->getMeshBufferCount(); j++)
         {
             video::IGPUMeshBuffer* mb = LoD[i].mesh->getMeshBuffer(j);
-            if (!mb||(mb->getIndexCount()<1 && !mb->isIndexCountGivenByXFormFeedback()))
+            if (!mb || mb->getIndexCount()<1)
                 continue;
 
             video::IMaterialRenderer* rnd = driver->getMaterialRenderer(mb->getMaterial().MaterialType);
