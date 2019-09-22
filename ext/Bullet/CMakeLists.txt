@@ -14,19 +14,19 @@ set(IRR_EXT_BULLET_H
   ${BULLETDYNAMICS_H}
   ${LINEARMATH_H}
   BulletUtility.h
-  MeshConverter.h 
   CDebugRender.h 
   CInstancedMotionState.h
   IMotionStateBase.h
+  MeshConverter.h
 )
 
 set(IRR_EXT_BULLET_SRC
   ${BULLETCOLLISION_CPP}
   ${BULLETDYNAMICS_CPP}
   ${LINEARMATH_CPP}
-  MeshConverter.cpp
   CDebugRender.cpp
   CInstancedMotionState.cpp
+  MeshConverter.cpp
 )
 
 set(IRR_EXT_BULLET_EXTERNAL_INCLUDE

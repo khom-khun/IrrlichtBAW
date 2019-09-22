@@ -2,9 +2,6 @@
 #include "BulletUtility.h"
 #include "../../ext/DebugDraw/Draw3DLineShaders.h"
 
-
-#include <iostream>
-
 using namespace irr;
 using namespace ext;
 using namespace Bullet3;

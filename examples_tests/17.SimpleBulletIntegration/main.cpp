@@ -7,6 +7,7 @@
 #include "BulletCollision/NarrowPhaseCollision/btRaycastCallback.h"
 
 #include "../../ext/Bullet/BulletUtility.h"
+#include "../../ext/Bullet/MeshConverter.h"
 
 #include "../../ext/Bullet/CInstancedMotionState.h"
 #include "../../ext/Bullet/CDebugRender.h"
@@ -58,6 +59,8 @@ void handleRaycast(scene::ICameraSceneNode *cam, btDiscreteDynamicsWorld *world)
 }
 
 //Can't get thru world for freeSimpleBulletWorld! :(
+//Don't do this in an actual application please. 
+//It's just lazy not wanting to free memory in these funcs.
 btDefaultCollisionConfiguration config;
 
 btDiscreteDynamicsWorld *createSimpleBulletWorld() {
@@ -261,7 +264,7 @@ int main()
 
 
     core::matrix3x4SIMD baseplateMat;
-    baseplateMat.setTranslation(core::vectorSIMDf(0.0, -1.0, 0.0));
+    baseplateMat.setTranslation(core::vectorSIMDf(0.0, -10.0, 0.0));
 
 
 	ext::Bullet3::RigidBodyData baseplateData;
@@ -283,8 +286,8 @@ int main()
    
 
 	//!
-    asset::ICPUMesh* cpumesh = device->getAssetManager()->getGeometryCreator()->createCubeMesh(core::vector3df(1.f, 1.f, 1.f));
-    auto gpumesh = driver->getGPUObjectsFromAssets(&cpumesh, (&cpumesh)+1)->front();
+    auto cpumesh = device->getAssetManager()->getGeometryCreator()->createCubeMesh(core::vector3df(1.f, 1.f, 1.f));
+    auto gpumesh = driver->getGPUObjectsFromAssets(&cpumesh.get(), (&cpumesh.get())+1)->front();
     for (size_t i=0; i<gpumesh->getMeshBufferCount(); i++)
         gpumesh->getMeshBuffer(i)->getMaterial().MaterialType = (video::E_MATERIAL_TYPE)newMaterialType;
 
@@ -384,6 +387,21 @@ int main()
 	ext::Bullet3::CDebugRender *debugDraw = ext::Bullet3::createType<ext::Bullet3::CDebugRender>(driver);
 	dynamicWorld->setDebugDrawer(debugDraw);
 
+	// THE MAGICAL COW MESH!!!!!!!
+	asset::IAssetLoader::SAssetLoadParams lp;
+	auto cpuMesh = core::smart_refctd_ptr_static_cast<asset::ICPUMesh>(*device->getAssetManager()->getAsset("../../media/cow.obj", lp).getContents().first);
+	
+	btTriangleMesh *cowTriMesh = ext::Bullet3::convertToNaiveTrimesh(cpuMesh->getMeshBuffer(0));
+
+	core::matrix3x4SIMD trans;
+	trans.setTranslation(core::vectorSIMDf(0, -2, 0));
+
+	ext::Bullet3::RigidBodyData cowBodyData;
+	cowBodyData.shape = ext::Bullet3::createType<btBvhTriangleMeshShape>(cowTriMesh, false);
+	cowBodyData.shape->setLocalScaling(btVector3(10,10,10));
+	cowBodyData.trans = trans;
+	btRigidBody *cowBody = ext::Bullet3::createRigidBodyFrom(cowBodyData);
+	dynamicWorld->addRigidBody(cowBody);
 
     uint64_t timeDiff = 0;
 	while(device->run()	&& receiver.keepOpen())
@@ -441,9 +459,18 @@ int main()
 		ext::Bullet3::freeType(bodies[i]);
     }
 	ext::Bullet3::freeType(instanceBodyData.shape);
+
+	dynamicWorld->removeRigidBody(cowBody);
+
+	ext::Bullet3::freeType(cowTriMesh);
+	ext::Bullet3::freeType(cowBodyData.shape);
+	ext::Bullet3::freeType(cowBody);
+
+
 	ext::Bullet3::freeType(dynamicWorld);
 
    
+
     node->removeInstances(towerHeight*towerWidth,instances);
     node->remove();
 

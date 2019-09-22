@@ -42,7 +42,7 @@ public:
 protected:
     
     irr::video::IVideoDriver *m_driver;
-    irr::ext::DebugDraw::CDraw3DLine *m_lineRender;
+    core::smart_refctd_ptr<irr::ext::DebugDraw::CDraw3DLine> m_lineRender;
     core::vector<std::pair<DebugDraw::S3DLineVertex, DebugDraw::S3DLineVertex>> m_scene;
 
     int m_drawMode;
